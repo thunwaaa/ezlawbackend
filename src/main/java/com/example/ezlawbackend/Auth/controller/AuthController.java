@@ -1,18 +1,24 @@
 package com.example.ezlawbackend.Auth.controller;
 
-import com.example.ezlawbackend.Auth.repository.UserRepository;
+import com.example.ezlawbackend.Auth.model.UserMySQL;
+import com.example.ezlawbackend.Auth.repository.UserMySQLRepository;
 import com.example.ezlawbackend.Auth.dto.SignUpRequest;
 import com.example.ezlawbackend.Auth.model.User;
+import com.example.ezlawbackend.Auth.service.StripeService;
 import com.example.ezlawbackend.Auth.service.UserService;
-import org.apache.tomcat.util.http.parser.HttpParser;
+import com.stripe.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import java.util.Map;
 import java.util.HashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.stripe.Stripe;
+import com.stripe.model.PaymentIntent;
+import com.stripe.model.Subscription;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -21,8 +27,17 @@ import java.util.HashMap;
         methods = {RequestMethod.POST,RequestMethod.GET,RequestMethod.DELETE,RequestMethod.PUT},
         allowCredentials = "true")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private  UserMySQLRepository userMySQLRepository;
+
+    @Autowired
+    private StripeService stripeService;
 
     private static final String USER_ID_KEY = "userId";
     private static final String EMAIL_KEY = "email";
@@ -96,10 +111,39 @@ public class AuthController {
     }
 
     @PostMapping("/upgrade")
-    public String upgradeUser(@RequestBody Map<String, String > request){
-        String email = request.get("email");
-        userService.upgradeToMembership(email);
-        return "User upgrade to membership";
+    public ResponseEntity<?> upgradeUser(@RequestBody Map<String, String> request, HttpSession session) {
+        try {
+            String email = (String) session.getAttribute("email");
+            if (email == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "No active session"));
+            }
+
+            UserMySQL userMySQL = userMySQLRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            // Create Stripe subscription in THB
+            Subscription subscription = stripeService.createThaiSubscription(userMySQL, request.get("planType"));
+
+            String invoiceId = subscription.getLatestInvoice();
+            Invoice invoice = Invoice.retrieve(invoiceId); // Fetch the invoice from Stripe
+            String paymentIntentId = invoice.getPaymentIntent();
+
+            // Fetch the PaymentIntent using its ID
+            PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentIntentId);
+
+            // Get the client secret
+            String clientSecret = paymentIntent.getClientSecret();
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Subscription initiated",
+                    "subscriptionId", subscription.getId(),
+                    "clientSecret", clientSecret
+            ));
+        } catch (Exception e) {
+            logger.error("Upgrade failed", e);
+            return ResponseEntity.badRequest().body(Map.of("error", "Upgrade failed"));
+        }
     }
 
     @PostMapping("/edit-profile")

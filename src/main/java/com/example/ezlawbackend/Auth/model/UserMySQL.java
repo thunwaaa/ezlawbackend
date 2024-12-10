@@ -1,11 +1,12 @@
 package com.example.ezlawbackend.Auth.model;
 
-import javax.persistence.Entity;
-import javax.persistence.Table;
-import javax.persistence.Id;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Column;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.Id;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Column;
 
 @Entity
 @Table(name = "users")
@@ -33,6 +34,15 @@ public class UserMySQL {
     private String phone;
 
     private String gender;
+
+    @Column
+    private String stripeCustomerId; // Add this to store Stripe Customer ID
+
+    @Column
+    private String currency = "thb";
+
+    @Column
+    private boolean isMember = false;
 
     // Default constructor
     public UserMySQL() {}
@@ -111,5 +121,29 @@ public class UserMySQL {
 
     public void setGender(String gender) {
         this.gender = gender;
+    }
+
+    public String getStripeCustomerId() {
+        return stripeCustomerId;
+    }
+
+    public void setStripeCustomerId(String stripeCustomerId) {
+        this.stripeCustomerId = stripeCustomerId;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public void setCurrency(String currency) {
+        this.currency = currency;
+    }
+
+    public boolean isMember() {
+        return isMember;
+    }
+
+    public void setMember(boolean member) {
+        isMember = member;
     }
 }
